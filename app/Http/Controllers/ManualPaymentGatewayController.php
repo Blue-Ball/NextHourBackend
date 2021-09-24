@@ -1,0 +1,142 @@
+<?php
+
+namespace App\Http\Controllers;
+
+
+use App\ManualPaymentMethod;
+
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+
+use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Facades\Validator;
+use Image;
+
+
+class ManualPaymentGatewayController extends Controller
+{
+    public function getindex()
+    {
+       
+        $methods = ManualPaymentMethod::orderBy('id', 'DESC')->get();
+        return view('admin.manualpayment.index', compact('methods'));
+    }
+
+    public function store(Request $request)
+    {
+        
+
+        $request->validate([
+            'payment_name' => 'required|string|max:50|unique:manual_payment_methods,payment_name',
+            'description' => 'required|max:5000',
+            'thumbnail' => 'mimes:jpg,jpeg,png,webp,bmp',
+        ]);
+
+        $newmethod = new ManualPaymentMethod;
+        $input = $request->all();
+
+        if (!is_dir(public_path() . '/images/manual_payment')) {
+            mkdir(public_path() . '/images/manual_payment');
+        }
+
+        if ($request->file('thumbnail')) {
+
+            $image = $request->file('thumbnail');
+            $img = Image::make($image->path());
+            $mp = 'mp_' . uniqid() . '.' . $image->getClientOriginalExtension();
+            $destinationPath = public_path('/images/manualpayment');
+            $img->resize(600, 600, function ($constraint) {
+                $constraint->aspectRatio();
+            });
+
+            $img->save($destinationPath . '/' . $mp);
+            $input['thumbnail'] = $mp;
+        }
+
+        $input['status'] = isset($request->status) ? 1 : 0;
+
+        $newmethod->create($input);
+
+        notify()->success('Payment method added !', $request->payment_name);
+        return back();
+
+    }
+
+    public function update(Request $request, $id)
+    {
+
+       
+        $method = ManualPaymentMethod::find($id);
+
+        if (!$method) {
+            notify()->error('Payment method not found !', 404);
+            return back();
+        }
+
+        $request->validate([
+            'payment_name' => 'required|string|max:50|unique:manual_payment_methods,payment_name,' . $method->id,
+            'description' => 'required|max:5000',
+            'thumbnail' => 'mimes:jpg,jpeg,png,webp,bmp',
+        ]);
+
+        $input = $request->all();
+
+        if ($request->file('thumbnail')) {
+
+            if (!is_dir(public_path() . '/images/manualpayment')) {
+                mkdir(public_path() . '/images/manualpayment');
+            }
+
+            $image = $request->file('thumbnail');
+            $img = Image::make($image->path());
+
+            if ($method->thumbnail != '' && file_exists(public_path() . '/images/manualpayment/' . $method->thumbnail)) {
+                unlink(public_path() . '/images/manualpayment/' . $method->thumbnail);
+            }
+
+            $mp = 'mp_' . uniqid() . '.' . $image->getClientOriginalExtension();
+            $destinationPath = public_path('/images/manualpayment');
+            $img->resize(600, 600, function ($constraint) {
+                $constraint->aspectRatio();
+            });
+
+            $img->save($destinationPath . '/' . $mp);
+            $input['thumbnail'] = $mp;
+        }
+
+        $input['status'] = isset($request->status) ? 1 : 0;
+
+        $method->update($input);
+
+        notify()->success('Payment method updated !', $request->payment_name);
+        return back();
+
+    }
+
+    public function delete($id)
+    {
+       
+
+        $method = ManualPaymentMethod::find($id);
+
+        if (!$method) {
+            notify()->error('Payment method not found !', 404);
+            return back();
+        }
+
+        if ($method->thumbnail != '' && file_exists(public_path() . '/images/manualpayment/' . $method->thumbnail)) {
+            unlink(public_path() . '/images/manualpayment/' . $method->thumbnail);
+        }
+
+        notify()->success("Payment method deleted", $method->payment_name);
+
+        $method->delete();
+
+        return back();
+    }
+
+
+  
+
+  
+}
